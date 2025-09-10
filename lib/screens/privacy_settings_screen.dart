@@ -19,6 +19,7 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen> {
   bool _shareDataWithThirdParty = false;
   bool _locationTracking = false;
   bool _crashReporting = true;
+  bool _termsAccepted = false;
 
   @override
   void initState() {
@@ -35,6 +36,7 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen> {
       _shareDataWithThirdParty = prefs.getBool('privacy_third_party') ?? false;
       _locationTracking = prefs.getBool('privacy_location') ?? false;
       _crashReporting = prefs.getBool('privacy_crash_reporting') ?? true;
+      _termsAccepted = prefs.getBool('terms_conditions_accepted') ?? false;
     });
   }
 
@@ -46,6 +48,7 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen> {
     await prefs.setBool('privacy_third_party', _shareDataWithThirdParty);
     await prefs.setBool('privacy_location', _locationTracking);
     await prefs.setBool('privacy_crash_reporting', _crashReporting);
+    await prefs.setBool('terms_conditions_accepted', _termsAccepted);
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -86,6 +89,12 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // Terms and Conditions Section
+            if (!_termsAccepted) ...[
+              _buildTermsSection(),
+              SizedBox(height: 32),
+            ],
+            
             _buildSectionHeader('Data Collection'),
             SizedBox(height: 16),
 
@@ -168,6 +177,103 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen> {
             _buildPrivacyInfo(),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildTermsSection() {
+    return Container(
+      padding: EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: CustomColors.getPrimaryColor(context).withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: CustomColors.getPrimaryColor(context).withValues(alpha: 0.3),
+          width: 2,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                Icons.gavel,
+                color: CustomColors.getPrimaryColor(context),
+                size: 24,
+              ),
+              SizedBox(width: 12),
+              Text(
+                'Terms and Conditions',
+                style: GoogleFonts.inter(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: CustomColors.getPrimaryColor(context),
+                ),
+              ),
+            ],
+          ),
+          SizedBox(height: 16),
+          Text(
+            'By using EduVision, you agree to our Terms and Conditions and Privacy Policy. Please read and accept to continue using the app.',
+            style: GoogleFonts.inter(
+              fontSize: 14,
+              color: CustomColors.getOnSurfaceColor(context).withValues(alpha: 0.8),
+            ),
+          ),
+          SizedBox(height: 16),
+          Row(
+            children: [
+              Checkbox(
+                value: _termsAccepted,
+                onChanged: (value) {
+                  setState(() {
+                    _termsAccepted = value ?? false;
+                  });
+                },
+                activeColor: CustomColors.getPrimaryColor(context),
+              ),
+              Expanded(
+                child: Text(
+                  'I have read and agree to the Terms and Conditions',
+                  style: GoogleFonts.inter(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                    color: CustomColors.getOnSurfaceColor(context),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          SizedBox(height: 16),
+          Row(
+            children: [
+              TextButton(
+                onPressed: _showTermsAndConditions,
+                child: Text(
+                  'Read Terms & Conditions',
+                  style: GoogleFonts.inter(
+                    color: CustomColors.getPrimaryColor(context),
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              Spacer(),
+              ElevatedButton(
+                onPressed: _termsAccepted ? _acceptTerms : null,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: CustomColors.getPrimaryColor(context),
+                  foregroundColor: Colors.white,
+                  padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                ),
+                child: Text(
+                  'Accept & Continue',
+                  style: GoogleFonts.inter(fontWeight: FontWeight.w600),
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
@@ -420,6 +526,52 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen> {
           'Account deletion request submitted. You will be contacted for verification.',
         ),
         backgroundColor: Colors.orange,
+      ),
+    );
+  }
+
+  void _acceptTerms() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('terms_conditions_accepted', true);
+    
+    setState(() {
+      _termsAccepted = true;
+    });
+    
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Terms and Conditions accepted successfully!'),
+        backgroundColor: CustomColors.getSuccessColor(context),
+      ),
+    );
+  }
+
+  void _showTermsAndConditions() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Terms and Conditions'),
+        content: SingleChildScrollView(
+          child: Text(
+            'EduVision Terms and Conditions\n\n'
+            '1. Acceptance of Terms: By using this app, you agree to these terms.\n\n'
+            '2. Use of Service: This app is for educational purposes only.\n\n'
+            '3. Face Recognition: We use face recognition for attendance and security.\n\n'
+            '4. Data Privacy: Your data is protected and not shared with third parties.\n\n'
+            '5. User Responsibilities: Use the app responsibly and follow school policies.\n\n'
+            '6. Prohibited Uses: No unauthorized access or misuse of the system.\n\n'
+            '7. Privacy Policy: Please read our Privacy Policy for data handling details.\n\n'
+            '8. Changes: We may update these terms from time to time.\n\n'
+            '9. Contact: For questions, contact your school administrator.\n\n'
+            'Last updated: ${DateTime.now().year}',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('Close'),
+          ),
+        ],
       ),
     );
   }
