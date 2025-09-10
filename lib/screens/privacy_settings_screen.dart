@@ -29,6 +29,13 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen> {
 
   Future<void> _loadPrivacySettings() async {
     final prefs = await SharedPreferences.getInstance();
+    
+    // Debug logging
+    final termsAccepted = prefs.getBool('terms_conditions_accepted') ?? false;
+    print('📱 Loading privacy settings...');
+    print('📱 Terms accepted: $termsAccepted');
+    print('📱 All SharedPreferences keys: ${prefs.getKeys()}');
+    
     setState(() {
       _dataCollectionEnabled = prefs.getBool('privacy_data_collection') ?? true;
       _analyticsEnabled = prefs.getBool('privacy_analytics') ?? true;
@@ -36,7 +43,7 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen> {
       _shareDataWithThirdParty = prefs.getBool('privacy_third_party') ?? false;
       _locationTracking = prefs.getBool('privacy_location') ?? false;
       _crashReporting = prefs.getBool('privacy_crash_reporting') ?? true;
-      _termsAccepted = prefs.getBool('terms_conditions_accepted') ?? false;
+      _termsAccepted = termsAccepted;
     });
   }
 
@@ -533,6 +540,10 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen> {
   void _acceptTerms() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('terms_conditions_accepted', true);
+    
+    // Debug logging
+    print('💾 Saving terms acceptance: true');
+    print('💾 All SharedPreferences keys after save: ${prefs.getKeys()}');
     
     setState(() {
       _termsAccepted = true;

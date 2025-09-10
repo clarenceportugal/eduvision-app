@@ -204,21 +204,48 @@ class _SplashScreenState extends State<SplashScreen>
       if (status == AnimationStatus.completed) {
         Future.delayed(const Duration(seconds: 2), () {
           _animationController.reverse().then((_) {
-            Navigator.of(context).pushReplacement(
-              PageRouteBuilder(
-                pageBuilder: (context, animation, secondaryAnimation) =>
-                    const TermsScreen(),
-                transitionsBuilder:
-                    (context, animation, secondaryAnimation, child) {
-                      return FadeTransition(opacity: animation, child: child);
-                    },
-                transitionDuration: const Duration(milliseconds: 800),
-              ),
-            );
+            _checkTermsAndNavigate();
           });
         });
       }
     });
+  }
+
+  Future<void> _checkTermsAndNavigate() async {
+    final prefs = await SharedPreferences.getInstance();
+    final termsAccepted = prefs.getBool('terms_conditions_accepted') ?? false;
+    
+    // Debug logging
+    print('🔍 Checking terms acceptance: $termsAccepted');
+    print('🔍 All SharedPreferences keys: ${prefs.getKeys()}');
+    
+    if (termsAccepted) {
+      print('✅ Terms already accepted, going to Login Screen');
+      // Terms already accepted, go directly to login
+      Navigator.of(context).pushReplacement(
+        PageRouteBuilder(
+          pageBuilder: (context, animation, secondaryAnimation) =>
+              const LoginScreen(),
+          transitionsBuilder: (context, animation, secondaryAnimation, child) {
+            return FadeTransition(opacity: animation, child: child);
+          },
+          transitionDuration: const Duration(milliseconds: 800),
+        ),
+      );
+    } else {
+      print('❌ Terms not accepted, showing Terms Screen');
+      // Terms not accepted yet, show terms screen
+      Navigator.of(context).pushReplacement(
+        PageRouteBuilder(
+          pageBuilder: (context, animation, secondaryAnimation) =>
+              const TermsScreen(),
+          transitionsBuilder: (context, animation, secondaryAnimation, child) {
+            return FadeTransition(opacity: animation, child: child);
+          },
+          transitionDuration: const Duration(milliseconds: 800),
+        ),
+      );
+    }
   }
 
   @override
