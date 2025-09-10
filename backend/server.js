@@ -7,18 +7,18 @@ const cloudinary = require('cloudinary').v2;
 const multer = require('multer');
 
 const app = express();
-const port = 3000;
+const port = process.env.PORT || 3000;
 
 // MongoDB connection details
-const MONGODB_URI = 'mongodb+srv://saynoseanniel:mathematics10@cluster0.crfzw.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0';
-const DATABASE_NAME = 'eduvision';
-const COLLECTION_NAME = 'users';
+const MONGODB_URI = process.env.MONGODB_URI || 'mongodb+srv://saynoseanniel:mathematics10@cluster0.crfzw.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0';
+const DATABASE_NAME = process.env.DATABASE_NAME || 'eduvision';
+const COLLECTION_NAME = process.env.COLLECTION_NAME || 'users';
 
 // Cloudinary configuration
 cloudinary.config({
-  cloud_name: 'deqtxoewp',
-  api_key: '429458566368881',
-  api_secret: '1NPDJVTgxydH8VCOD7w-NLhFVdc'
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME || 'deqtxoewp',
+  api_key: process.env.CLOUDINARY_API_KEY || '429458566368881',
+  api_secret: process.env.CLOUDINARY_API_SECRET || '1NPDJVTgxydH8VCOD7w-NLhFVdc'
 });
 
 // Configure multer for handling multipart/form-data
@@ -366,13 +366,23 @@ app.put('/api/change-password/:userId', async (req, res) => {
   }
 });
 
+// Health check endpoint for Render
+app.get('/health', (req, res) => {
+  res.status(200).json({
+    status: 'healthy',
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime()
+  });
+});
+
 // Test connection endpoint
 app.get('/api/test', (req, res) => {
   res.json({
     success: true,
     message: 'Server is running',
     database: DATABASE_NAME,
-    collection: COLLECTION_NAME
+    collection: COLLECTION_NAME,
+    environment: process.env.NODE_ENV || 'development'
   });
 });
 
@@ -761,13 +771,20 @@ function generateToken(userId) {
 }
 
 app.listen(port, '0.0.0.0', () => {
-  console.log(`Server running at http://localhost:${port}`);
-  console.log(`Server also accessible at http://0.0.0.0:${port}`);
-  console.log(`Database: ${DATABASE_NAME}`);
-  console.log(`Collection: ${COLLECTION_NAME}`);
-  console.log(`\nTo access from your phone:`);
-  console.log(`1. Find your computer's IP address (ipconfig on Windows)`);
-  console.log(`2. Use http://YOUR_COMPUTER_IP:${port} in the app`);
+  console.log(`🚀 EduVision Backend Server Started`);
+  console.log(`📍 Port: ${port}`);
+  console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
+  console.log(`🗄️  Database: ${DATABASE_NAME}`);
+  console.log(`📊 Collection: ${COLLECTION_NAME}`);
+  console.log(`☁️  Cloudinary: ${process.env.CLOUDINARY_CLOUD_NAME || 'deqtxoewp'}`);
+  
+  if (process.env.NODE_ENV === 'production') {
+    console.log(`🌐 Production server running on Render`);
+  } else {
+    console.log(`\n📱 To access from your phone:`);
+    console.log(`1. Find your computer's IP address (ipconfig on Windows)`);
+    console.log(`2. Use http://YOUR_COMPUTER_IP:${port} in the app`);
+  }
 });
 
 // To run this server:
