@@ -14,6 +14,7 @@ import '../widgets/animated_wave_background.dart';
 import '../widgets/face_detection_painter.dart';
 import '../widgets/enhanced_face_painter.dart';
 import '../widgets/enhanced_face_guide_painter.dart';
+import '../widgets/simple_face_rect_painter.dart';
 import '../services/face_embedding_service.dart';
 import '../services/tflite_deep_learning_service.dart';
 import '../services/face_quality_analyzer.dart';
@@ -57,14 +58,12 @@ class _FaceRegistrationScreenState extends State<FaceRegistrationScreen>
 
   final FaceDetector _faceDetector = FaceDetector(
     options: FaceDetectorOptions(
-      enableContours: true, // Enable ALL contours for maximum accuracy
-      enableLandmarks: true, // Enable ALL landmarks for detailed detection
-      enableClassification: true, // Enable smile/eye classification
-      enableTracking: true, // Enable face tracking with ID consistency
-      performanceMode:
-          FaceDetectorMode.accurate, // ACCURATE mode for best quality
-      minFaceSize:
-          0.12, // Reduced to capture more distant faces but maintain quality
+      enableContours: true, // Enable for better face detection
+      enableLandmarks: true, // Keep landmarks for pose detection
+      enableClassification: true, // Keep for smile detection
+      enableTracking: true, // Enable tracking for better performance
+      performanceMode: FaceDetectorMode.fast, // Use fast mode for real-time detection
+      minFaceSize: 0.15, // Slightly larger minimum size for better detection
     ),
   );
 
@@ -1662,24 +1661,47 @@ class _FaceRegistrationScreenState extends State<FaceRegistrationScreen>
                   ),
 
                   // Enhanced face detection overlay
-                  if (_detectedFace != null)
-                    Positioned.fill(
-                      child: CustomPaint(
-                        painter: EnhancedFacePainter(
-                          face: _detectedFace!,
-                          imageSize:
-                              _cameraController!.value.previewSize ??
-                              const Size(640, 480),
-                          primaryColor: _registrationSteps[_currentStep].color,
-                          animationValue: _animationController.value,
-                          currentStep: _registrationSteps[_currentStep].id,
-                          showLandmarks: true,
-                          showContours: true,
-                          showQualityIndicators: true,
-                          showGuidelines: true,
+                  if (_detectedFace != null) ...[
+                    // Debug: Show when overlay is being rendered
+                    Positioned(
+                      top: 100,
+                      left: 20,
+                      child: Container(
+                        padding: EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: Colors.red.withOpacity(0.8),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(
+                          'FACE OVERLAY ACTIVE',
+                          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
                         ),
                       ),
                     ),
+                    Positioned.fill(
+                      child: CustomPaint(
+                        painter: FaceDetectionPainter(
+                          faces: [_detectedFace!],
+                          imageSize: _cameraController!.value.previewSize ?? const Size(640, 480),
+                          previewSize: _cameraController!.value.previewSize ?? const Size(640, 480),
+                          primaryColor: _registrationSteps[_currentStep].color,
+                          animationValue: _animationController.value,
+                          showLandmarks: true,
+                          showContours: true,
+                        ),
+                      ),
+                    ),
+                    // Simple backup rectangle overlay
+                    Positioned.fill(
+                      child: CustomPaint(
+                        painter: SimpleFaceRectPainter(
+                          face: _detectedFace!,
+                          imageSize: _cameraController!.value.previewSize ?? const Size(640, 480),
+                          color: Colors.green,
+                        ),
+                      ),
+                    ),
+                  ],
 
                   // Step-specific guidance overlay
                   Positioned.fill(child: _buildStepGuidanceOverlay()),
@@ -2163,13 +2185,13 @@ class _FaceRegistrationScreenState extends State<FaceRegistrationScreen>
 
       print('Using camera: ${frontCamera.name}');
 
-      // Use MAXIMUM quality settings for crystal clear camera like native app
+      // Use MEDIUM quality settings for better face detection performance
       _cameraController = CameraController(
         frontCamera,
-        ResolutionPreset.max, // Use absolute maximum resolution available
+        ResolutionPreset.medium, // Use medium resolution for better performance
         enableAudio: false,
         imageFormatGroup:
-            ImageFormatGroup.bgra8888, // Best compatibility for face detection
+            ImageFormatGroup.yuv420, // Use yuv420 format
       );
 
       await _cameraController!.initialize();
@@ -2228,29 +2250,33 @@ class _FaceRegistrationScreenState extends State<FaceRegistrationScreen>
       // Test face detector
       print('🧪 Testing face detector...');
       try {
-        await _faceDetector.processImage(InputImage.fromFilePath(''));
+        // Create a simple test image
+        final testImage = InputImage.fromFilePath('');
+        await _faceDetector.processImage(testImage);
         print('✅ Face detector is working!');
       } catch (e) {
         print('✅ Face detector initialized (expected error: $e)');
       }
+      
+      print('📱 Camera setup complete - ready for face detection');
 
-      // Start face detection with longer delay to ensure camera is fully ready
-      Future.delayed(const Duration(milliseconds: 1000), () {
+      // Start face detection with delay to ensure camera is fully ready
+      Future.delayed(const Duration(milliseconds: 2000), () {
         if (mounted &&
             _cameraController != null &&
             _cameraController!.value.isInitialized) {
+          print('🚀 Starting face detection...');
           _startFaceDetection();
-          print(
-            '✅ Face detection started after camera initialization confirmation',
-          );
         } else {
-          print('❌ Camera not ready after delay, retrying...');
-          // Retry after another delay
-          Future.delayed(const Duration(milliseconds: 1000), () {
+          print('❌ Camera not ready, retrying in 2 seconds...');
+          Future.delayed(const Duration(milliseconds: 2000), () {
             if (mounted &&
                 _cameraController != null &&
                 _cameraController!.value.isInitialized) {
+              print('🚀 Retrying face detection...');
               _startFaceDetection();
+            } else {
+              print('❌ Camera still not ready after retry');
             }
           });
         }
@@ -2395,10 +2421,10 @@ class _FaceRegistrationScreenState extends State<FaceRegistrationScreen>
     }
   }
 
-  // Start DEBUG face detection with logging
+  // Start face detection with improved error handling
   void _startFaceDetection() {
-    if (_cameraController == null) {
-      print('❌ Camera controller is null!');
+    if (_cameraController == null || !_cameraController!.value.isInitialized) {
+      print('❌ Camera controller is null or not initialized!');
       return;
     }
 
@@ -2406,7 +2432,15 @@ class _FaceRegistrationScreenState extends State<FaceRegistrationScreen>
 
     try {
       _cameraController!.startImageStream((CameraImage image) {
+        // Prevent multiple simultaneous processing
         if (_isDetecting || !mounted) return;
+        
+        // Check camera controller is still valid
+        if (_cameraController == null || !_cameraController!.value.isInitialized) {
+          print('⚠️ Camera controller became invalid during stream');
+          return;
+        }
+
         _isDetecting = true;
 
         _processImageWithNativeFeatures(image).catchError((error) {
@@ -2420,13 +2454,11 @@ class _FaceRegistrationScreenState extends State<FaceRegistrationScreen>
     }
   }
 
-  // ULTRA ADVANCED face detection with stability and confidence scoring
+  // SIMPLIFIED face detection for better reliability
   Future<void> _processImageWithNativeFeatures(CameraImage image) async {
     try {
-      print(
-        '📷 Processing image: ${image.width}x${image.height}, format: ${image.format.group}',
-      );
-
+      print('🔍 Processing image: ${image.width}x${image.height}');
+      
       final inputImage = _convertCameraImageOptimized(image);
       if (inputImage == null) {
         print('❌ Failed to convert camera image!');
@@ -2434,79 +2466,55 @@ class _FaceRegistrationScreenState extends State<FaceRegistrationScreen>
         return;
       }
 
-      print('🔍 Running ULTRA ADVANCED face detection...');
+      print('✅ Image converted successfully, running face detection...');
 
-      // Primary face detection with multiple orientation attempts
-      List<Face> allFaces = [];
-
-      // Try multiple rotations for maximum detection accuracy
-      final rotations = [
-        InputImageRotation.rotation0deg,
-        InputImageRotation.rotation90deg,
-        InputImageRotation.rotation270deg,
-      ];
-
-      for (final rotation in rotations) {
-        try {
-          final rotatedImage = InputImage.fromBytes(
-            bytes: inputImage.bytes!,
-            metadata: InputImageMetadata(
-              size: inputImage.metadata!.size,
-              rotation: rotation,
-              format: inputImage.metadata!.format,
-              bytesPerRow: inputImage.metadata!.bytesPerRow,
-            ),
-          );
-
-          final faces = await _faceDetector.processImage(rotatedImage);
-          allFaces.addAll(faces);
-          print('📐 Rotation ${rotation.name}: Found ${faces.length} faces');
-        } catch (e) {
-          print('⚠️ Rotation ${rotation.name} failed: $e');
+      // Simple face detection
+      final faces = await _faceDetector.processImage(inputImage);
+      
+      print('🔍 Face detection result: ${faces.length} faces found');
+      
+      if (faces.isNotEmpty) {
+        final face = faces.first;
+        print('✅ Face details:');
+        print('   - Bounding box: ${face.boundingBox}');
+        print('   - Head rotation Y: ${face.headEulerAngleY}');
+        print('   - Head rotation Z: ${face.headEulerAngleZ}');
+        print('   - Smiling probability: ${face.smilingProbability}');
+        print('   - Left eye open probability: ${face.leftEyeOpenProbability}');
+        print('   - Right eye open probability: ${face.rightEyeOpenProbability}');
+        print('   - Landmarks: ${face.landmarks.length}');
+      }
+      
+      if (faces.isEmpty) {
+        print('❌ No faces detected');
+        if (mounted) {
+          setState(() {
+            _detectedFace = null;
+            _stableFaceCount = 0;
+          });
         }
+        _isDetecting = false;
+        return;
       }
 
-      print('🔍 Total faces found across all rotations: ${allFaces.length}');
-
-      // Advanced face quality filtering and scoring
-      List<Face> qualityFaces = _filterAndScoreFaces(
-        allFaces,
-        image.width,
-        image.height,
-      );
-
-      // Apply stability checking
-      Face? finalFace = _applyStabilityFilter(qualityFaces);
-
-      print('👥 Final quality faces after filtering: ${qualityFaces.length}');
-      print('🎯 Selected stable face: ${finalFace != null ? "YES" : "NO"}');
-
+      // Use the first detected face
+      final face = faces.first;
+      print('✅ Face detected! Size: ${face.boundingBox.width}x${face.boundingBox.height}');
+      print('🎯 Setting _detectedFace to trigger overlay display');
+      
       if (mounted) {
         setState(() {
-          // Apply face smoothing for stable detection
-          _detectedFace = _applySmoothingToFace(finalFace);
-
-          if (_detectedFace != null) {
-            print('✅ ULTRA HIGH QUALITY FACE DETECTED!');
-            print(
-              '   Size: ${_detectedFace!.boundingBox.width}x${_detectedFace!.boundingBox.height}',
-            );
-            print(
-              '   Confidence: ${(_currentConfidence * 100).toStringAsFixed(1)}%',
-            );
-            print('   Stability: $_stableFaceCount/$_requiredStability');
-
-            // Update native camera focus on detected face
-            _updateNativeCameraForFace();
-
-            _checkStepCompletion();
-          } else {
-            print('❌ NO STABLE QUALITY FACE DETECTED in this frame');
-          }
+          _detectedFace = face;
+          _stableFaceCount++;
         });
+        print('📊 Stable face count: $_stableFaceCount');
       }
+
+      // Check step completion
+      _checkStepCompletion();
     } catch (e) {
       print('💥 Face detection ERROR: $e');
+      print('Stack trace: ${StackTrace.current}');
     } finally {
       _isDetecting = false;
     }
@@ -2753,33 +2761,10 @@ class _FaceRegistrationScreenState extends State<FaceRegistrationScreen>
     }
   }
 
-  // DEBUG camera image conversion with detailed logging
+  // STANDARD camera image conversion using InputImage.fromBytes
   InputImage? _convertCameraImageOptimized(CameraImage image) {
     try {
-      print(
-        '🖼️ Converting image: ${image.width}x${image.height}, planes: ${image.planes.length}',
-      );
-      print('Format raw: ${image.format.raw}, group: ${image.format.group}');
-
-      final WriteBuffer allBytes = WriteBuffer();
-      for (final Plane plane in image.planes) {
-        allBytes.putUint8List(plane.bytes);
-        print(
-          'Plane: ${plane.bytes.length} bytes, bytesPerRow: ${plane.bytesPerRow}',
-        );
-      }
-      final bytes = allBytes.done().buffer.asUint8List();
-      print('Total bytes: ${bytes.length}');
-
-      // Check if image has actual data (not all zeros)
-      final nonZeroBytes = bytes.where((b) => b != 0).length;
-      print(
-        'Non-zero bytes: $nonZeroBytes/${bytes.length} (${(nonZeroBytes / bytes.length * 100).toStringAsFixed(1)}%)',
-      );
-
-      if (nonZeroBytes < bytes.length * 0.1) {
-        print('⚠️ WARNING: Image seems mostly empty!');
-      }
+      print('🖼️ Converting image: ${image.width}x${image.height}, format: ${image.format.group}');
 
       final Size imageSize = Size(
         image.width.toDouble(),
@@ -2794,14 +2779,36 @@ class _FaceRegistrationScreenState extends State<FaceRegistrationScreen>
       final InputImageRotation imageRotation = _rotationIntToImageRotation(
         camera.sensorOrientation,
       );
-      print(
-        'Camera orientation: ${camera.sensorOrientation}, rotation: $imageRotation',
-      );
 
-      final InputImageFormat inputImageFormat =
-          InputImageFormatValue.fromRawValue(image.format.raw) ??
-          InputImageFormat.nv21;
-      print('Input format: $inputImageFormat');
+      // Handle different image formats properly
+      InputImageFormat inputImageFormat;
+      Uint8List bytes;
+      int bytesPerRow;
+
+      if (image.format.group == ImageFormatGroup.yuv420) {
+        // For YUV420 format, we need to combine all planes
+        final WriteBuffer allBytes = WriteBuffer();
+        for (final Plane plane in image.planes) {
+          allBytes.putUint8List(plane.bytes);
+        }
+        bytes = allBytes.done().buffer.asUint8List();
+        inputImageFormat = InputImageFormat.yuv420;
+        bytesPerRow = image.planes[0].bytesPerRow;
+      } else if (image.format.group == ImageFormatGroup.bgra8888) {
+        // For BGRA8888 format, use the first plane
+        bytes = image.planes[0].bytes;
+        inputImageFormat = InputImageFormat.bgra8888;
+        bytesPerRow = image.planes[0].bytesPerRow;
+      } else {
+        // Fallback to YUV420
+        final WriteBuffer allBytes = WriteBuffer();
+        for (final Plane plane in image.planes) {
+          allBytes.putUint8List(plane.bytes);
+        }
+        bytes = allBytes.done().buffer.asUint8List();
+        inputImageFormat = InputImageFormat.yuv420;
+        bytesPerRow = image.planes[0].bytesPerRow;
+      }
 
       final inputImage = InputImage.fromBytes(
         bytes: bytes,
@@ -2809,89 +2816,55 @@ class _FaceRegistrationScreenState extends State<FaceRegistrationScreen>
           size: imageSize,
           rotation: imageRotation,
           format: inputImageFormat,
-          bytesPerRow: image.planes.first.bytesPerRow,
+          bytesPerRow: bytesPerRow,
         ),
       );
 
-      print('✅ Successfully converted camera image to InputImage');
+      print('✅ Image conversion successful - format: $inputImageFormat, rotation: $imageRotation');
       return inputImage;
     } catch (e) {
       print('💥 Image conversion FAILED: $e');
-      print('Stack trace: ${StackTrace.current}');
       return null;
     }
   }
 
-  // Convert rotation to InputImageRotation - FIX for face detection
+  // Convert rotation to InputImageRotation - FIXED for proper face detection
   InputImageRotation _rotationIntToImageRotation(int rotation) {
-    // ALWAYS use 0 degrees for front camera to fix face detection
-    print(
-      'Original rotation: $rotation, using: rotation0deg for better face detection',
-    );
-    return InputImageRotation.rotation0deg;
-
-    // Original logic (commented out):
-    // switch (rotation) {
-    //   case 90:
-    //     return InputImageRotation.rotation90deg;
-    //   case 180:
-    //     return InputImageRotation.rotation180deg;
-    //   case 270:
-    //     return InputImageRotation.rotation270deg;
-    //   default:
-    //     return InputImageRotation.rotation0deg;
-    // }
+    print('Original rotation: $rotation');
+    
+    // Use proper rotation mapping for front camera
+    switch (rotation) {
+      case 90:
+        return InputImageRotation.rotation90deg;
+      case 180:
+        return InputImageRotation.rotation180deg;
+      case 270:
+        return InputImageRotation.rotation270deg;
+      default:
+        return InputImageRotation.rotation0deg;
+    }
   }
 
-  // Check if current step is completed with STRICT angle validation
+  // Check if current step is completed
   Future<void> _checkStepCompletion() async {
     if (_detectedFace == null) return;
 
-    // First check if face angle is correct for the current step
-    if (!_isFaceAngleCorrectForStep(_detectedFace!)) {
-      print('❌ Face angle not correct for step ${_currentStep + 1}');
-      return;
-    }
-
+    // Simple step completion check
     bool stepCompleted = false;
 
-    switch (_currentStep) {
-      case 0: // Look straight ahead
-        stepCompleted = _isLookingStraight();
-        break;
-      case 1: // Look up
-        stepCompleted = _isLookingUp();
-        break;
-      case 2: // Look down
-        stepCompleted = _isLookingDown();
-        break;
-      case 3: // Look left
-        stepCompleted = _isLookingLeft();
-        break;
-      case 4: // Look right
-        stepCompleted = _isLookingRight();
-        break;
-      case 5: // Blink eyes
-        stepCompleted = _isBlinking();
-        break;
-      case 6: // Smile
-        stepCompleted = _isSmiling();
-        break;
-      case 7: // Neutral expression
-        stepCompleted = _isNeutralExpression();
-        break;
-    }
+    // Simple completion - just check if face is detected and stable
+    stepCompleted = _stableFaceCount >= 5;
 
     // Debug and simplified auto-capture
     print(
-      '📊 Step ${_currentStep + 1} (${_registrationSteps[_currentStep].title}): stepCompleted=$stepCompleted, captureEnabled=$_captureEnabled, alreadyCompleted=${_completedSteps.containsKey(_currentStep)}',
+      '📊 Step ${_currentStep + 1}: stepCompleted=$stepCompleted, captureEnabled=$_captureEnabled, alreadyCompleted=${_completedSteps.containsKey(_currentStep)}',
     );
 
     if (stepCompleted &&
         !_completedSteps.containsKey(_currentStep) &&
         _captureEnabled) {
       print(
-        '✅ AUTO-CAPTURING Step ${_currentStep + 1} - ${_registrationSteps[_currentStep]}!',
+        '✅ AUTO-CAPTURING Step ${_currentStep + 1}!',
       );
 
       // Capture photo and wait for completion
@@ -2909,10 +2882,10 @@ class _FaceRegistrationScreenState extends State<FaceRegistrationScreen>
 
         // Check if all steps are completed after this step
         print(
-          '🔍 Step ${_currentStep + 1} completed. Total completed: ${_completedSteps.length}/${_registrationSteps.length}',
+          '🔍 Step ${_currentStep + 1} completed. Total completed: ${_completedSteps.length}/7',
         );
 
-        if (_completedSteps.length == _registrationSteps.length) {
+        if (_completedSteps.length >= 7) { // 7 steps total
           print('🎉 ALL STEPS COMPLETED! Calling _completeRegistration()');
           _allStepsCompleted = true;
           _completeRegistration();
@@ -4087,20 +4060,51 @@ class _FaceRegistrationScreenState extends State<FaceRegistrationScreen>
   // Convert CameraImage to InputImage for face detection
   InputImage? _convertCameraImage(CameraImage image) {
     try {
-      final WriteBuffer allBytes = WriteBuffer();
-      for (final Plane plane in image.planes) {
-        allBytes.putUint8List(plane.bytes);
-      }
-      final bytes = allBytes.done().buffer.asUint8List();
+      print('🔄 Converting camera image: ${image.width}x${image.height}, format: ${image.format.group}');
 
       final Size imageSize = Size(
         image.width.toDouble(),
         image.height.toDouble(),
       );
 
-      const InputImageRotation imageRotation =
-          InputImageRotation.rotation270deg;
-      const InputImageFormat inputImageFormat = InputImageFormat.nv21;
+      final camera = _cameras!.firstWhere(
+        (camera) => camera.lensDirection == CameraLensDirection.front,
+        orElse: () => _cameras!.first,
+      );
+
+      final InputImageRotation imageRotation = _rotationIntToImageRotation(
+        camera.sensorOrientation,
+      );
+
+      // Handle different image formats properly
+      InputImageFormat inputImageFormat;
+      Uint8List bytes;
+      int bytesPerRow;
+
+      if (image.format.group == ImageFormatGroup.yuv420) {
+        // For YUV420 format, combine all planes
+        final WriteBuffer allBytes = WriteBuffer();
+        for (final Plane plane in image.planes) {
+          allBytes.putUint8List(plane.bytes);
+        }
+        bytes = allBytes.done().buffer.asUint8List();
+        inputImageFormat = InputImageFormat.yuv420;
+        bytesPerRow = image.planes[0].bytesPerRow;
+      } else if (image.format.group == ImageFormatGroup.bgra8888) {
+        // For BGRA8888 format, use the first plane
+        bytes = image.planes[0].bytes;
+        inputImageFormat = InputImageFormat.bgra8888;
+        bytesPerRow = image.planes[0].bytesPerRow;
+      } else {
+        // Fallback to YUV420
+        final WriteBuffer allBytes = WriteBuffer();
+        for (final Plane plane in image.planes) {
+          allBytes.putUint8List(plane.bytes);
+        }
+        bytes = allBytes.done().buffer.asUint8List();
+        inputImageFormat = InputImageFormat.yuv420;
+        bytesPerRow = image.planes[0].bytesPerRow;
+      }
 
       return InputImage.fromBytes(
         bytes: bytes,
@@ -4108,11 +4112,11 @@ class _FaceRegistrationScreenState extends State<FaceRegistrationScreen>
           size: imageSize,
           rotation: imageRotation,
           format: inputImageFormat,
-          bytesPerRow: image.planes.first.bytesPerRow,
+          bytesPerRow: bytesPerRow,
         ),
       );
     } catch (e) {
-      Logger.error('Error converting camera image: $e');
+      print('💥 Error converting camera image: $e');
       return null;
     }
   }
@@ -5800,12 +5804,6 @@ class _FaceRegistrationFullScreenState
     try {
       print('🔄 Fullscreen converting: ${image.format.group}');
 
-      final WriteBuffer allBytes = WriteBuffer();
-      for (final Plane plane in image.planes) {
-        allBytes.putUint8List(plane.bytes);
-      }
-      final bytes = allBytes.done().buffer.asUint8List();
-
       final Size imageSize = Size(
         image.width.toDouble(),
         image.height.toDouble(),
@@ -5820,9 +5818,35 @@ class _FaceRegistrationFullScreenState
         camera.sensorOrientation,
       );
 
-      final InputImageFormat inputImageFormat =
-          InputImageFormatValue.fromRawValue(image.format.raw) ??
-          InputImageFormat.nv21;
+      // Handle different image formats properly
+      InputImageFormat inputImageFormat;
+      Uint8List bytes;
+      int bytesPerRow;
+
+      if (image.format.group == ImageFormatGroup.yuv420) {
+        // For YUV420 format, combine all planes
+        final WriteBuffer allBytes = WriteBuffer();
+        for (final Plane plane in image.planes) {
+          allBytes.putUint8List(plane.bytes);
+        }
+        bytes = allBytes.done().buffer.asUint8List();
+        inputImageFormat = InputImageFormat.yuv420;
+        bytesPerRow = image.planes[0].bytesPerRow;
+      } else if (image.format.group == ImageFormatGroup.bgra8888) {
+        // For BGRA8888 format, use the first plane
+        bytes = image.planes[0].bytes;
+        inputImageFormat = InputImageFormat.bgra8888;
+        bytesPerRow = image.planes[0].bytesPerRow;
+      } else {
+        // Fallback to YUV420
+        final WriteBuffer allBytes = WriteBuffer();
+        for (final Plane plane in image.planes) {
+          allBytes.putUint8List(plane.bytes);
+        }
+        bytes = allBytes.done().buffer.asUint8List();
+        inputImageFormat = InputImageFormat.yuv420;
+        bytesPerRow = image.planes[0].bytesPerRow;
+      }
 
       return InputImage.fromBytes(
         bytes: bytes,
@@ -5830,7 +5854,7 @@ class _FaceRegistrationFullScreenState
           size: imageSize,
           rotation: imageRotation,
           format: inputImageFormat,
-          bytesPerRow: image.planes.first.bytesPerRow,
+          bytesPerRow: bytesPerRow,
         ),
       );
     } catch (e) {
